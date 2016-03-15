@@ -14,6 +14,7 @@ def log(sql, args=()):
 @asyncio.coroutine
 def create_pool(loop, **kw):
     logging.info('create database connection pool...');
+    logging.info('Configuration Info: %s' % kw);
     global __pool
     __pool = yield from aiomysql.create_pool(
             host=kw.get('host', 'localhost'),
@@ -171,6 +172,37 @@ class Model(dict, metaclass=ModelMetaclass):
         if len(rs) == 0:
             return None;
         return cls(**rs[0]);
+
+    @classmethod
+    @asyncio.coroutine
+    def findAll(cls, where = None, args = None, **kw):
+        'Find all objects by primary key';
+        sql = [cls.__select__]
+        if where:
+            sql.append('where');
+            sql.append(where);
+        if args is None:
+            args = [];
+
+        orderBy = kw.get('orderBy', None);
+        if orderBy:
+            sql.append('order by');
+            sql.append(orderBy);
+
+        limit = kw.get('limit', None);
+        if limit is not None:
+            sql.append('limit');
+            if isinstance(limit, int):
+                sql.append('?');
+                args.append(limit);
+            elif isinstance(limit, tuple) and len(limit) == 2:
+                sql.append('?,?');
+                args.extend(limit);
+            else:
+                raise ValueError('Invalid limit value: %s' % str(limit));
+
+        rs = yield from select(' '.join(sql), args);
+        return [cls(**r) for r in rs];
 
     @asyncio.coroutine
     def save(self):
